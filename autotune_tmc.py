@@ -129,7 +129,15 @@ class AutotuneTMC:
                                             self.handle_ready)
         # Register command
         gcode = self.printer.lookup_object("gcode")
-        gcode.register_mux_command("AUTOTUNE_TMC", "STEPPER", self.name,
+        gcode.register_mux_command("AUTOTUNE_TMC_GET_RUN_CURRENT",
+                                   "STEPPER",
+                                   self.name,
+                                   self.cmd_AUTOTUNE_TMC_GET_RUN_CURRENT,
+                                   desc=
+                                   self.cmd_AUTOTUNE_TMC_GET_RUN_CURRENT_help)
+        gcode.register_mux_command("AUTOTUNE_TMC",
+                                   "STEPPER",
+                                   self.name,
                                    self.cmd_AUTOTUNE_TMC,
                                    desc=self.cmd_AUTOTUNE_TMC_help)
 
@@ -150,6 +158,9 @@ class AutotuneTMC:
         self.tune_driver()
         return self.reactor.NEVER
 
+    cmd_AUTOTUNE_TMC_GET_RUN_CURRENT_help = "Get Autotuned run_current of the TMC stepper driver"
+    def cmd_AUTOTUNE_TMC_GET_RUN_CURRENT(self, gcmd):
+        gcmd.respond_info("run_current: %f" % self.run_current)
     cmd_AUTOTUNE_TMC_help = "Apply autotuning configuration to TMC stepper driver"
     def cmd_AUTOTUNE_TMC(self, gcmd):
         logging.info("AUTOTUNE_TMC %s", self.name)
