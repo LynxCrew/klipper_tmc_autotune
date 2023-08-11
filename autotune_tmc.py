@@ -57,6 +57,7 @@ class TuningGoal(str, Enum):
 class AutotuneTMC:
     def __init__(self, config):
         self.printer = config.get_printer()
+        self.reactor = self.printer.get_reactor()
 
         # Load motor database
         pconfig = self.printer.lookup_object('configfile')
@@ -144,7 +145,10 @@ class AutotuneTMC:
         self.fclk = self.tmc_object.mcu_tmc.get_tmc_frequency()
         if self.fclk is None:
             self.fclk = 12.5e6
+        self.reactor.register_timer(self._init_tune, self.reactor.NOW)
+    def _init_tune(self, eventtime):
         self.tune_driver()
+        return self.reactor.NEVER
 
     cmd_AUTOTUNE_TMC_help = "Apply autotuning configuration to TMC stepper driver"
     def cmd_AUTOTUNE_TMC(self, gcmd):
