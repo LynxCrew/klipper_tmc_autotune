@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 KLIPPER_PATH="${HOME}/klipper"
 AUTOTUNETMC_PATH="${HOME}/klipper_tmc_autotune"
 
