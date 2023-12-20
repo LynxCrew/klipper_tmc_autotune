@@ -25,7 +25,7 @@ PWM_REG = 15
 PWM_LIM = 4
 
 # SpreadCycle parameters
-TPFD = 0
+TPFD = 2
 
 # CoolStep parameters
 FAST_STANDSTILL = True
@@ -40,7 +40,7 @@ IHOLDDELAY = 12
 IRUNDELAY = 0
 
 # High speed parameters
-VHIGHFS = True
+VHIGHFS = False
 VHIGHCHM = False # Even though we are fullstepping, we want SpreadCycle control
 
 
