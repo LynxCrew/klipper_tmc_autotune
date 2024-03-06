@@ -23,7 +23,7 @@ PWM_AUTOSCALE = True # Setup pwm autoscale even if we won't use PWM, because it
 PWM_AUTOGRAD = True
 PWM_REG = 15
 PWM_LIM = 4
-PWM_FREQ_TARGET = 55e3 # Default to 55 kHz
+PWM_FREQ_TARGET = 25e3 # Default to 25 kHz
 
 # SpreadCycle parameters
 TPFD = 0
@@ -213,6 +213,7 @@ class AutotuneTMC:
         self.run_current = _currents[0]
         self._set_hysteresis(self.run_current)
         self._set_pwmfreq()
+        self._set_toff()
         self._set_sg4thrs()
         motor = self.motor_object
         maxpwmrps = motor.maxpwmrps(volts=self.voltage, current=self.run_current)
@@ -266,6 +267,10 @@ class AutotuneTMC:
                                    ]
                          if self.fclk*i[1] < self.pwm_freq_target))[0]
         self._set_driver_field('pwm_freq', pwm_freq)
+
+    def _set_toff(self):
+        if self.toff == 0:
+            self.toff = int(math.ceil((1.0 / (4.0 * self.pwm_freq_target) * self.fclk - 12)/32))
 
     def _set_hysteresis(self, run_current):
         hstrt, hend = self.motor_object.hysteresis(
@@ -329,7 +334,7 @@ class AutotuneTMC:
     def _setup_spreadcycle(self):
         self._set_driver_field('tpfd', TPFD)
         self._set_driver_field('tbl', self.tbl)
-        self._set_driver_field('toff', self.toff if self.toff > 0 else int(math.ceil((0.85e-5 * self.fclk - 12)/32)))
+        self._set_driver_field('toff', self.toff)
 
     def _setup_coolstep(self, coolthrs):
         self._set_driver_velocity_field('tcoolthrs', coolthrs)
