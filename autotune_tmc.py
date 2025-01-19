@@ -14,9 +14,12 @@ VOLTAGE = 24.0
 OVERVOLTAGE_VTH = None
 
 # Generic tuning parameters
-COOLSTEP_THRS_FACTOR = 0.6
+COOLSTEP_THRS_FACTOR = 0.75
 FULLSTEP_THRS_FACTOR = 1.2
 MULTISTEP_FILT = True
+
+# 2240-specific parameters
+SLOPE_CONTROL = 3
 
 # PWM parameters
 PWM_AUTOSCALE = True # Setup pwm autoscale even if we won't use PWM, because it
@@ -24,7 +27,6 @@ PWM_AUTOSCALE = True # Setup pwm autoscale even if we won't use PWM, because it
 PWM_AUTOGRAD = True
 PWM_REG = 15
 PWM_LIM = 4
-PWM_FREQ_TARGET = 55e3 # Default to 55 kHz
 
 # SpreadCycle parameters
 TPFD = 0
@@ -47,8 +49,15 @@ VHIGHCHM = False # Even though we are fullstepping, we want SpreadCycle control
 
 
 TRINAMIC_DRIVERS = ["tmc2130", "tmc2208", "tmc2209", "tmc2240", "tmc2660", "tmc5160"]
+PWM_FREQ_TARGETS = {"tmc2130": 55e3,
+                    "tmc2208": 55e3,
+                    "tmc2209": 55e3,
+                    "tmc2240": 20e3, # 2240s run very hot at high frequencies
+                    "tmc2660": 55e3,
+                    "tmc5160": 55e3}
 
-AUTO_PERFORMANCE_MOTORS = {'stepper_x', 'stepper_y', 'stepper_x1', 'stepper_y1', 'stepper_a', 'stepper_b', 'stepper_c'}
+
+AUTO_PERFORMANCE_MOTORS = {'stepper_x', 'stepper_y', 'dual_carriage', 'stepper_x1', 'stepper_y1', 'stepper_a', 'stepper_b', 'stepper_c'}
 
 class TuningGoal(str, Enum):
     AUTO = "auto" # This is the default: automatically choose SILENT for Z and PERFORMANCE for X/Y
@@ -84,6 +93,7 @@ class AutotuneTMC:
             if config.has_section(driver_name):
                 self.tmc_section = config.getsection(driver_name)
                 self.driver_name = driver_name
+                self.driver_type = driver
                 break
         if self.tmc_section is None:
             raise config.error(
@@ -125,7 +135,8 @@ class AutotuneTMC:
         self.voltage = config.getfloat('voltage', default=VOLTAGE, minval=0.0, maxval=60.0)
         self.overvoltage_vth = config.getfloat('overvoltage_vth', default=OVERVOLTAGE_VTH,
                                               minval=0.0, maxval=60.0)
-        self.pwm_freq_target = config.getfloat('pwm_freq_target', default=PWM_FREQ_TARGET,
+        self.pwm_freq_target = config.getfloat('pwm_freq_target',
+                                               default=PWM_FREQ_TARGETS[self.driver_type],
                                                minval=10e3, maxval=100e3)
         self.printer.register_event_handler("klippy:connect",
                                             self.handle_connect)
@@ -159,7 +170,13 @@ class AutotuneTMC:
             self.tuning_goal = TuningGoal.SILENT if self.auto_silent else TuningGoal.PERFORMANCE
         self.motor_object = self.printer.lookup_object(self.motor_name)
         #self.tune_driver()
+
     def handle_ready(self):
+      # klippy:ready handlers are limited in what they may do. Communicating with a MCU
+      # will pause the reactor and is thus forbidden. That code has to run outside of the event handler.
+      self.printer.reactor.register_callback(self._handle_ready_deferred)
+
+    def _handle_ready_deferred(self, eventtime):
         if self.tmc_init_registers is not None:
             print_time = self.printer.lookup_object("mcu").estimated_print_time(self.printer.get_reactor().monotonic())
             self.tmc_init_registers(print_time=print_time)
@@ -175,8 +192,8 @@ class AutotuneTMC:
         return self.reactor.NEVER
     cmd_AUTOTUNE_TMC_help = "Apply autotuning configuration to TMC stepper driver"
     def cmd_AUTOTUNE_TMC(self, gcmd):
-        self.logger("AUTOTUNE_TMC %s", self.name)
-        tgoal = gcmd.get('TUNING_GOAL', TUNING_GOAL).lower()
+        logging.info("AUTOTUNE_TMC %s", self.name)
+        tgoal = gcmd.get('TUNING_GOAL', None)
         if tgoal is not None:
             try:
                 self.tuning_goal = TuningGoal(tgoal)
@@ -241,6 +258,8 @@ class AutotuneTMC:
         self._setup_coolstep(coolthrs)
         self._setup_highspeed(FULLSTEP_THRS_FACTOR * vmaxpwm)
         self._set_driver_field('multistep_filt', MULTISTEP_FILT)
+        # Cool down 2240s
+        self._set_driver_field('slope_control', SLOPE_CONTROL)
 
 
     def _set_driver_field(self, field, arg):

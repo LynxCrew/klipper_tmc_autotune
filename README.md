@@ -42,8 +42,17 @@ Your driver configurations should contain:
 * Pins
 * Currents (run current, hold current, homing current if using a Klipper version that supports the latter)
 * `interpolate: true`
+* Comment out any other register settings and sensorless homing values (keep them for reference, but they will not be active)
 
 The Klipper documentation recommends not using interpolation. However, that is most applicable if using low microstep counts, and using the default driver configuration. Autotune gives better results, both dimensionally and quality, by using interpolation and as many microsteps as feasible.
+
+Check the pinouts of your stepper driver boards: BTT TMC 2240 boards require configuring `diag1_pin` not `diag0_pin`, but MKS TMC 2240 stepsticks require `diag0_pin` and *not* `diag1_pin`. There may be other unusual drivers.
+
+## Sensorless homing
+
+Autotune can be used together with homing overrides for sensorless homing. However, you must adjust the `sg4_thrs` (TMC2209, TMC2260) and/or `sgt` (TMC5160, TMC2240, TMC2130, TMC2660) values specifically in the autotune sections. Attempting to make these changes via gcode or via the tmc driver sections will not result in an error message, but will have no effect since the autotuning algorithm will simply override them.
+
+Also note that the sensorless homing tuning will most likely change due to the other settings. In particular, autotune may require faster homing speeds to work; take the `rotation_distance` of the stepper as a minimum speed that can work, and if it is hard to tune home faster. Sensorless homing becomes much more sensitive at higher speeds.
 
 ## Autotune configuration
 
@@ -72,7 +81,7 @@ All the `[autotune_tmc]` sections accept additional parameters to tweak the beha
 | Parameter | Default value | Range | Description |
 | --- | --- | --- | --- |
 | motor |  | [See DB](motor_database.cfg) | This parameter is used to retrieve the physical constants of the motor connected to the TMC driver |
-| tuning_goal | `auto` | `auto`, `silent`, `performance`, and `autoswitch` | Parameter to choose how to fine-tune the TMC driver using StealthChop and tailored parameters. By opting for `auto`, it will automatically apply `performance` for the X and Y axes and `silent` for the Z axis and extruder. `autoswitch` is an highly experimental choice that enables dynamic switching between `silent` and `performance` modes in real-time when needed. However, at the moment, this transition can potentially be troublesome, resulting in unwanted behavior, noise disturbances and lost steps. Hence, it is recommended to avoid using 'autoswitch' until its identified issues are fully addressed |
+| tuning_goal | `auto` | `auto`, `silent`, `performance`, and `autoswitch` | Parameter to choose how to fine-tune the TMC driver using StealthChop and tailored parameters. By opting for `auto`, it will automatically apply `performance` for the X and Y axes and `silent` for the Z axis and extruder unless the motor is very small. `autoswitch` is an highly experimental choice that enables dynamic switching between `silent` and `performance` modes in real-time when needed. However, at the moment, this transition can potentially be troublesome, resulting in unwanted behavior, noise disturbances and lost steps. Hence, it is recommended to avoid using 'autoswitch' until its identified issues are fully addressed |
 | extra_hysteresis | 0 | 0 to 8 | Additional hysteresis to reduce motor humming and vibration at low to medium speeds and maintain proper microstep accuracy. Warning: use only as much as necessary as a too high value will result in more chopper noise and motor power dissipation (ie. more heat) |
 | tbl | 2 | 0 to 3 | Comparator blank time. This time must safely cover the TMC switching events. A value of 1 or 2 (default) should be fine for most typical applications, but higher capacitive loads may require this to be set to 3. Also, lower values allow StealthChop to regulate to lower coil current values |
 | toff | 0 | 0 to 15 | Sets the slow decay time (off time) of the chopper cycle. This setting also limits the maximum chopper frequency. When set to 0, the value is automatically computed by this autotuning algorithm. Highest motor velocities sometimes benefit from forcing `toff` to 1 or 2 and a setting a short `tbl` of 1 or 0 |
@@ -81,11 +90,6 @@ All the `[autotune_tmc]` sections accept additional parameters to tweak the beha
 | pwm_freq_target | 55e3 | 10e3 to 60e3 | Switching frequency target, in Hz. The code selects the highest available PWM switching frequency less than or equal to this. The default usually results in 48 kHz switching. |
 | voltage | 24 | 0.0 to 60.0 | Voltage used to power this motor and stepper driver |
 | overvoltage_vth |  | 0.0 to 60.0 | Set the optional overvoltage snubber built into the TMC2240 and TMC5160. Users of the BTT SB2240 toolhead board should use it for the extruder by reading the actual toolhead voltage and adding 0.8V |
-
-  > Note:
-  >
-  > This autotuning extension can be used together with homing overrides for sensorless homing. However, remember to adjust the `sg4_thrs` and/or `sgt` values specifically in the autotune sections. Attempting to make these changes via gcode will not result in an error message, but will have no effect since the autotuning algorithm will simply override them.
-  > Also, check the pinouts of your stepper driver boards: BTT TMC 2240 boards require configuring `diag1_pin` not `diag0_pin`, but MKS TMC 2240 stepsticks require `diag0_pin` and *not* `diag1_pin`. There may be other unusual drivers.
 
 Also if needed, you can adjust everything on the go when the printer is running by using the `AUTOTUNE_TMC` macro in the Klipper console. All previous parameters are available:
 ```
@@ -109,6 +113,8 @@ max_current: 0.00
 # Steps per revolution (1.8deg motors use 200, 0.9deg motors use 400)
 steps_per_revolution: 200
 ```
+
+Note that lead screw motors very often do not have a published torque. Use an online calculator to estimate the torque from the lead screw thrust, for example https://www.dingsmotionusa.com/torque-calculator.
 
 
 ## Removing this Klipper extension
